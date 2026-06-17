@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
 
 function App() {
+  const API = import.meta.env.VITE_API_URL;
   const [students, setStudents] = useState([]);
   const [name, setName] = useState("");
   const [country, setCountry] = useState("");
 
   // reusable function to load students
   const loadStudents = () => {
-    fetch("http://127.0.0.1:8000/students").then((response) => response.json()).then((data) => setStudents(data));
+    fetch(`${API}/students`).then((response) => response.json()).then((data) => setStudents(data));
   };
 
   useEffect(() => {
@@ -17,7 +18,7 @@ function App() {
   // runs when form is submitted
   const handleSubmit = (event) => {
     event.preventDefault(); // stop page reload
-    fetch("http://127.0.0.1:8000/students", {
+    fetch(`${API}/students`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: name, country: country }),
