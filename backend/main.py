@@ -1,16 +1,32 @@
-from pydantic import BaseModel
-from fastapi import FastAPI, HTTPException
-from bson import ObjectId
-from motor.motor_asyncio import AsyncIOMotorClient
-from dotenv import load_dotenv
-from fastapi.middleware.cors import CORSMiddleware
+# backend/main.py
 import os
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from dotenv import load_dotenv
 
-load_dotenv() #read .env file
+load_dotenv()
 
-app =  FastAPI()
+from database import ensure_indexes
+from core.seed import seed_admin
+from routers import (auth, students, ebooks, holidays, assignments,
+                     schedules, attendance, payments, teachers, users, countries)
 
-# CORS allow communication between frontend and backend
+
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)   # folder for uploaded eBooks
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await ensure_indexes()
+    await seed_admin()
+    yield
+
+
+app = FastAPI(title="English Passion API", lifespan=lifespan)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "https://final-project-pearl-six.vercel.app"],
@@ -19,56 +35,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Database connection
-MONGO_URL = os.getenv("MONGO_URL")
-client = AsyncIOMotorClient(MONGO_URL)
-db = client[os.getenv("DB_NAME", "ep_school")] # check better solution later for garanteing not none
+# Serve uploaded files (e.g. http://127.0.0.1:8000/uploads/abc.pdf)
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
-class Student(BaseModel):
-    name: str
-    country: str
-    
-@app.get("/")
-def read_root():
-    return {"message": "Hello World!"}
+app.include_router(auth.router)
+app.include_router(students.router)
+app.include_router(ebooks.router)
+app.include_router(holidays.router)
+app.include_router(assignments.router)
+app.include_router(schedules.router)
+app.include_router(attendance.router)
+app.include_router(payments.router)
+app.include_router(teachers.router)
+app.include_router(users.router)
+app.include_router(countries.router)
 
-@app.get("/ping-db")
-async def ping_db():
-    await client.admin.command("ping") # checks if mongodb is up
-    return {"database": "Connected"}
 
-# create student
-@app.post("/students")
-async def create_student(student: Student):
-    result = await db.students.insert_one(student.model_dump())
-    return {"id": str(result.inserted_id), "name": student.name, "country": student.country}
-
-# return students list
-@app.get("/students")
-async def get_students():
-    students = []
-    async for doc in db.students.find():
-        doc["id"] = str(doc["_id"])  # convert ObjectId to string
-        del doc["_id"]               # delete raw ObjectID
-        students.append(doc)
-    return students
-
-# update student data
-@app.put("/students/{student_id}")
-async def update_student(student_id: str, student: Student):
-    result = await db.students.update_one(
-        {"_id": ObjectId(student_id)},   # find document with this Id
-        {"$set": student.model_dump()}  # update data
-    )
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Student not found")
-    return {"message": "Student Updated"}
-
-# delete student
-@app.delete("/students/{student_id}")
-async def delete_student(student_id: str):
-    result = await db.students.delete_one({"_id": ObjectId(student_id)})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Student not found")
-    return {"message": "Student Deleted"}
-    
+@app.get("/api/health")
+async def health():
+    return {"status": "ok"}
