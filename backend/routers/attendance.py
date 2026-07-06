@@ -213,11 +213,15 @@ async def get_report(
 async def update_row(attendance_id: str, payload: AttendanceUpdate):
     _id = parse_object_id(attendance_id)
 
-    updates = {k: v for k, v in payload.model_dump().items() if v is not None}
+    # Use exclude_unset so a field the client explicitly sends as null
+    # (e.g. clearing the payable time back to blank) is actually saved,
+    # instead of being dropped as if it had not been sent.
+    updates = payload.model_dump(exclude_unset=True)
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
 
-    if "status" in updates:
+    # If a status is provided, validate it and refresh its label + color.
+    if updates.get("status") is not None:
         if updates["status"] not in STUDENT_STATUSES:
             raise HTTPException(status_code=400, detail="Invalid status")
         updates["status_label"] = STUDENT_STATUSES[updates["status"]]

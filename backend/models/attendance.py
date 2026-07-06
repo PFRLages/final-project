@@ -7,7 +7,7 @@ class GenerateReportRequest(BaseModel):
     student_id: str
     month: int                       # 1 = January ... 12 = December
     year: int
-    country: str                     # used to auto-fill that country's holidays
+    country: str | None = None       # optional: the country is auto-derived from the student record
     payable_time_minutes: int = 25   # standard class length
 
 

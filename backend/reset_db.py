@@ -1,5 +1,5 @@
 # backend/reset_db.py
-# DANGER: deletes ALL data and recreates the admin + 3 teachers.
+# DANGER: deletes ALL data and recreates the admin + 2 teachers + 2 students.
 # Run from the backend folder:  python reset_db.py
 import asyncio
 from datetime import datetime, timezone
@@ -15,7 +15,13 @@ ADMIN_PASSWORD = "test26"
 TEACHERS = [
     ("Kristin", "kristin@ep.com", "test26"),
     ("Mai", "mai@ep.com", "test26"),
-    ("Irene", "irene@ep.com", "test26"),
+]
+
+# (name, email, password, country) for the starting student accounts.
+# Each one gets a student record plus a linked login account.
+STUDENTS = [
+    ("Lucas Gabriel", "lucas@ep.com", "test26", "South Korea"),
+    ("Kana", "kana@ep.com", "test26", "Japan"),
 ]
 
 COLLECTIONS = [
@@ -46,7 +52,7 @@ async def reset():
     })
     print(f"Created admin -> {ADMIN_EMAIL} / {ADMIN_PASSWORD}")
 
-    # 4) Seed the 3 teachers
+    # 4) Seed the teachers
     for name, email, pw in TEACHERS:
         await db.users.insert_one({
             "email": email,
@@ -59,7 +65,34 @@ async def reset():
         })
         print(f"Created teacher -> {email} / {pw}")
 
-    # 5) Re-import any PDFs already sitting in the uploads folder
+    # 5) Seed the students (student record + linked login account)
+    for name, email, pw, country in STUDENTS:
+        student_doc = {
+            "name": name,
+            "email": email,
+            "level": None,
+            "mobile": None,
+            "preferred_name": None,
+            "country": country,
+            "active": True,
+            "created_at": datetime.now(timezone.utc),
+        }
+        result = await db.students.insert_one(student_doc)
+        student_id = str(result.inserted_id)
+
+        await db.users.insert_one({
+            "email": email,
+            "password": hash_password(pw),
+            "name": name,
+            "role": "student",
+            "must_change_password": False,
+            "active": True,
+            "student_id": student_id,  # link login -> student record
+            "created_at": datetime.now(timezone.utc),
+        })
+        print(f"Created student -> {email} / {pw} ({country})")
+
+    # 6) Re-import any PDFs already sitting in the uploads folder
     count = await import_existing_pdfs()
     print(f"Imported {count} existing PDF(s) from the uploads folder.")
 
